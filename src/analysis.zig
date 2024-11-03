@@ -281,7 +281,49 @@ pub fn formatFunction(
                                 if (is_comma or tag == .keyword_const) try writer.writeByte(' ');
                             }
                         } else {
-                            try writer.writeAll(offsets.nodeToSlice(tree.*, param.type_expr));
+                            const raw_slice = offsets.nodeToSlice(tree.*, param.type_expr);
+                            var new_slice = [_]u8{0} ** 1024;
+                            var prev_byte: u8 = 0;
+                            var total: usize = 0;
+                            var last_comma_index: usize = 0;
+
+                            for (0..raw_slice.len) |index| {
+                                const is_current_whitespace = std.ascii.isWhitespace(raw_slice[index]);
+                                if (is_current_whitespace and std.ascii.isWhitespace(prev_byte)) {
+                                    continue;
+                                }
+                                if (is_current_whitespace) {
+                                    new_slice[total] = ' ';
+                                } else {
+                                    new_slice[total] = raw_slice[index];
+                                }
+                                if (raw_slice[index] == ',') {
+                                    last_comma_index = total;
+                                }
+                                prev_byte = raw_slice[index];
+                                total += 1;
+                            }
+
+                            var ends_with_comma = true;
+                            var index = last_comma_index + 1;
+                            while (index < total) {
+                                if (new_slice[index] == ':') {
+                                    ends_with_comma = false;
+                                    break;
+                                }
+                                index += 1;
+                            }
+
+                            if (ends_with_comma) {
+                                var index_ = last_comma_index;
+                                while (index_ < total - 1) {
+                                    new_slice[index_] = new_slice[index_ + 1];
+                                    index_ += 1;
+                                }
+                                total -= 1;
+                            }
+
+                            try writer.writeAll(new_slice[0..total]);
                         }
                     } else if (param.anytype_ellipsis3) |token_index| {
                         switch (token_tags[token_index]) {
